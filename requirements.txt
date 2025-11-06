@@ -1,0 +1,4 @@
+cianparser
+streamlit
+pandas
+openpyxl
