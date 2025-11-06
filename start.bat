@@ -1,70 +1,65 @@
 @echo off
-chcp 65001 >nul
 echo ==========================================
-echo   Парсер квартир Циан - Запуск
+echo   Cian Parser - Starting...
 echo ==========================================
 echo.
 
-REM Проверка наличия Python
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo [ОШИБКА] Python не найден!
+    echo [ERROR] Python is not installed or not in PATH!
     echo.
-    echo Пожалуйста, установите Python 3.8 или выше:
+    echo Please install Python 3.8 or higher from:
     echo https://www.python.org/downloads/
     echo.
-    echo При установке обязательно поставьте галочку "Add Python to PATH"!
+    echo IMPORTANT: Check "Add Python to PATH" during installation!
     echo.
     pause
     exit /b 1
 )
 
-echo [✓] Python найден
+echo [OK] Python found:
 python --version
 echo.
 
-REM Проверка наличия зависимостей
 python -c "import streamlit" >nul 2>&1
 if errorlevel 1 (
-    echo [!] Зависимости не установлены. Начинаем установку...
-    echo.
-    echo Это может занять несколько минут...
+    echo [!] Installing dependencies...
+    echo This may take a few minutes...
     echo.
     python -m pip install --upgrade pip
     python -m pip install -r requirements.txt
     if errorlevel 1 (
         echo.
-        echo [ОШИБКА] Не удалось установить зависимости.
-        echo Проверьте подключение к интернету и попробуйте снова.
+        echo [ERROR] Failed to install dependencies.
+        echo Check your internet connection and try again.
         echo.
         pause
         exit /b 1
     )
     echo.
-    echo [✓] Зависимости успешно установлены!
+    echo [OK] Dependencies installed successfully!
     echo.
 ) else (
-    echo [✓] Зависимости уже установлены
+    echo [OK] Dependencies already installed
     echo.
 )
 
 echo ==========================================
-echo   Запуск приложения...
+echo   Starting application...
 echo ==========================================
 echo.
-echo Приложение откроется в браузере автоматически
-echo Адрес: http://localhost:8501
+echo Application will open in your browser
+echo URL: http://localhost:8501
 echo.
-echo Для остановки нажмите Ctrl+C
+echo Press Ctrl+C to stop the application
 echo ==========================================
 echo.
 
-REM Запуск приложения
 python -m streamlit run app.py
 
 if errorlevel 1 (
     echo.
-    echo [ОШИБКА] Не удалось запустить приложение.
+    echo [ERROR] Failed to start application.
     echo.
     pause
     exit /b 1

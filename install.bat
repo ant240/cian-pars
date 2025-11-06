@@ -1,41 +1,39 @@
 @echo off
-chcp 65001 >nul
 echo ==========================================
-echo   Установка зависимостей
+echo   Installing Dependencies
 echo ==========================================
 echo.
 
-REM Проверка Python
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo [ОШИБКА] Python не найден!
-    echo Установите Python с https://www.python.org/downloads/
+    echo [ERROR] Python not found!
+    echo Install Python from https://www.python.org/downloads/
     pause
     exit /b 1
 )
 
-echo [✓] Python найден
+echo [OK] Python found:
 python --version
 echo.
 
-echo Обновление pip...
+echo Upgrading pip...
 python -m pip install --upgrade pip
 echo.
 
-echo Установка зависимостей...
+echo Installing dependencies...
 echo.
 python -m pip install -r requirements.txt
 
 if errorlevel 1 (
     echo.
-    echo [ОШИБКА] Установка не удалась.
+    echo [ERROR] Installation failed.
     echo.
 ) else (
     echo.
-    echo [✓] Все зависимости успешно установлены!
+    echo [OK] All dependencies installed successfully!
     echo.
-    echo Теперь запустите приложение файлом start.bat
-    echo или командой: python -m streamlit run app.py
+    echo Now run the application using start.bat
+    echo or command: python -m streamlit run app.py
     echo.
 )
 
