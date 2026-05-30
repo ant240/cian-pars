@@ -53,24 +53,20 @@ def parse_newbuildings(city, rooms, start_page, end_page):
     try:
         with st.spinner(f'Парсинг данных со страниц {start_page}-{end_page}...'):
             parser = cianparser.CianParser(location=city)
-            # ВАЖНО: добавляем параметр pages, он ограничивает количество страниц
+            additional_settings = {
+                "start_page": start_page,
+                "end_page": end_page
+            }
             data = parser.get_flats(
                 deal_type="sale",
                 rooms=tuple(rooms),
-                pages=end_page,          # вместо additional_settings
-                start_page=start_page
+                additional_settings=additional_settings
             )
             return data
     except Exception as e:
-        st.error(f"Ошибка: {str(e)}")
+        st.error(f"Ошибка при парсинге: {str(e)}")
         return None
         
-# Функция обработки данных
-def process_data(df):
-    """Обработка и расчет стоимости за кв.м"""
-    if df is None or len(df) == 0:
-        return None
-
     # Преобразуем в DataFrame если это не DataFrame
     if not isinstance(df, pd.DataFrame):
         df = pd.DataFrame(df)
