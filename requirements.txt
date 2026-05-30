@@ -1,5 +1,3 @@
 git+https://github.com/SC1DR-OFFICIAL/cianparser-with-headers.git
-streamlit==1.36.0
 pandas
 openpyxl
-cianparser==1.0.4
