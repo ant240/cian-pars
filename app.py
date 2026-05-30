@@ -6,12 +6,12 @@ import os
 
 # Настройка страницы
 st.set_page_config(
-    page_title="Парсер квартир в новостройках Циан",
+    page_title=" Аналитика недвижимости ",
     page_icon="🏠",
     layout="wide"
 )
 
-st.title("🏠 Парсер квартир в новостройках с Циан")
+st.title(" Аналитика недвижимости ")
 st.markdown("---")
 
 # Инициализация session state
@@ -22,7 +22,7 @@ if 'parsing_done' not in st.session_state:
 
 # Боковая панель с настройками
 with st.sidebar:
-    st.header("⚙️ Настройки парсинга")
+    st.header("⚙️ Настройки поиска")
 
     city = st.text_input("Город", value="Москва")
 
@@ -50,29 +50,21 @@ with st.sidebar:
 
 # Функция парсинга
 def parse_newbuildings(city, rooms, start_page, end_page):
-    """Парсинг новостроек с Циан"""
     try:
         with st.spinner(f'Парсинг данных со страниц {start_page}-{end_page}...'):
             parser = cianparser.CianParser(location=city)
-
-            # Настройки для парсинга
-            additional_settings = {
-                "start_page": start_page,
-                "end_page": end_page
-            }
-
-            # Парсим квартиры в новостройках (продажа)
+            # ВАЖНО: добавляем параметр pages, он ограничивает количество страниц
             data = parser.get_flats(
                 deal_type="sale",
                 rooms=tuple(rooms),
-                additional_settings=additional_settings
+                pages=end_page,          # вместо additional_settings
+                start_page=start_page
             )
-
             return data
     except Exception as e:
-        st.error(f"Ошибка при парсинге: {str(e)}")
+        st.error(f"Ошибка: {str(e)}")
         return None
-
+        
 # Функция обработки данных
 def process_data(df):
     """Обработка и расчет стоимости за кв.м"""
