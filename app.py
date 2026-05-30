@@ -5,7 +5,7 @@ from datetime import datetime
 
 # --- Настройка страницы ---
 st.set_page_config(page_title="Аналитика недвижимости", layout="wide")
-st.title("🏠 Аналитика недвижимости (Циан + Авито)")
+st.title("🏠 Аналитика недвижимости")
 st.markdown("---")
 
 # --- Инициализация состояния сессии ---
@@ -14,23 +14,23 @@ if 'data' not in st.session_state:
 if 'parsing_done' not in st.session_state:
     st.session_state.parsing_done = False
 
-# --- Боковая панель с настройками парсинга ---
+# --- Боковая панель с настройками ---
 with st.sidebar:
     st.header("⚙️ Настройки поиска")
     city = st.text_input("Город", value="Москва")
-    
+
     st.subheader("Параметры парсинга")
     start_page = st.number_input("Начальная страница", min_value=1, value=1)
-    end_page = st.number_input("Конечная страница", min_value=1, value=2, 
+    end_page = st.number_input("Конечная страница", min_value=1, value=2,
                                help="Для теста ставьте 1-2. Больше 2 — могут заблокировать.")
-    rooms = st.multiselect("Количество комнат", options=[1,2,3,4,5,6], default=[1,2,3])
-    
+    rooms = st.multiselect("Количество комнат", options=[1, 2, 3, 4, 5, 6], default=[1, 2, 3])
+
     st.subheader("Фильтры (предварительные)")
     min_price = st.number_input("Мин. цена (₽)", min_value=0, value=0)
     max_price = st.number_input("Макс. цена (₽)", min_value=0, value=0, help="0 = без ограничения")
     min_area = st.number_input("Мин. площадь (м²)", min_value=0.0, value=0.0)
     max_area = st.number_input("Макс. площадь (м²)", min_value=0.0, value=0.0, help="0 = без ограничения")
-    
+
     parse_button = st.button("🚀 Начать парсинг", type="primary", use_container_width=True)
 
 # --- Функция парсинга ---
@@ -52,31 +52,39 @@ def parse_newbuildings(city, rooms, start_page, end_page):
         st.error(f"Ошибка при парсинге: {str(e)}")
         return None
 
-# --- Обработка данных (расчёт цены за м², очистка) ---
+# --- Обработка данных ---
 def process_data(df):
     if df is None or len(df) == 0:
         return None
     if not isinstance(df, pd.DataFrame):
         df = pd.DataFrame(df)
-    
-    # Проверяем, что нужные колонки есть
+
     if 'price' not in df.columns or 'total_meters' not in df.columns:
         return None
-    
+
     df['price'] = pd.to_numeric(df['price'], errors='coerce')
     df['total_meters'] = pd.to_numeric(df['total_meters'], errors='coerce')
-    
-    # Удаляем строки с некорректными значениями
+
     df = df.dropna(subset=['price', 'total_meters'])
     df = df[(df['price'] > 0) & (df['total_meters'] > 0)]
-    
+
     if len(df) == 0:
         return None
-    
+
     df['price_per_sqm'] = (df['price'] / df['total_meters']).round(2)
+
+    # Определяем тип недвижимости (если данных нет, помечаем как "Не указано")
+    if 'is_apartment' in df.columns:
+        df['property_type'] = df['is_apartment'].apply(
+            lambda x: 'Новостройка' if x is True else 'Вторичка'
+        )
+    else:
+        # Создаем фиктивную колонку, если её нет в данных
+        df['property_type'] = 'Не указано'
+
     return df
 
-# --- Обработка кнопки парсинга ---
+# --- Запуск парсинга ---
 if parse_button:
     if not rooms:
         st.error("Выберите хотя бы одно количество комнат!")
@@ -85,7 +93,8 @@ if parse_button:
         if raw_data is not None and len(raw_data) > 0:
             processed = process_data(raw_data)
             if processed is not None and len(processed) > 0:
-                # Применяем предварительные фильтры из боковой панели
+
+                # Применяем предварительные фильтры
                 if min_price > 0:
                     processed = processed[processed['price'] >= min_price]
                 if max_price > 0:
@@ -94,7 +103,7 @@ if parse_button:
                     processed = processed[processed['total_meters'] >= min_area]
                 if max_area > 0:
                     processed = processed[processed['total_meters'] <= max_area]
-                
+
                 if len(processed) > 0:
                     st.session_state.data = processed
                     st.session_state.parsing_done = True
@@ -106,13 +115,13 @@ if parse_button:
         else:
             st.warning("Не удалось получить данные. Причины: блокировка ЦИАН, неверные параметры или временная недоступность.")
 
-# --- Отображение результатов и фильтрация ---
+# --- Отображение данных и расширенные фильтры ---
 if st.session_state.parsing_done and st.session_state.data is not None:
     df = st.session_state.data.copy()
-    
+
     st.markdown("---")
     st.header("📊 Результаты парсинга")
-    
+
     # Краткая статистика
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -123,44 +132,61 @@ if st.session_state.parsing_done and st.session_state.data is not None:
         st.metric("Средняя цена за м²", f"{df['price_per_sqm'].mean():,.0f} ₽")
     with col4:
         st.metric("Средняя площадь", f"{df['total_meters'].mean():.1f} м²")
-    
+
     st.markdown("---")
-    st.subheader("🔍 Уточняющие фильтры (после парсинга)")
-    
-    # Фильтр по цене
+    st.subheader("🔍 Уточняющие фильтры")
+
+    # --- Фильтр по типу недвижимости (Новостройка / Вторичка) ---
+    # Создаем список уникальных значений из колонки property_type и убираем возможные пустые значения
+    property_types_available = sorted(df['property_type'].dropna().unique())
+    if property_types_available:
+        # По умолчанию выбираем все доступные типы недвижимости (["Новостройка", "Вторичка"])
+        selected_property_types = st.multiselect(
+            "Тип недвижимости",
+            options=property_types_available,
+            default=property_types_available
+        )
+        if selected_property_types:
+            df = df[df['property_type'].isin(selected_property_types)]
+        else:
+            st.warning("Выберите хотя бы один тип недвижимости для отображения данных.")
+    # --- Конец фильтра по типу недвижимости ---
+
+    # Фильтр по цене (слайдер)
     price_min_global = int(df['price'].min())
     price_max_global = int(df['price'].max())
     price_range = st.slider("Цена (₽)", price_min_global, price_max_global, (price_min_global, price_max_global))
     df = df[(df['price'] >= price_range[0]) & (df['price'] <= price_range[1])]
-    
-    # Фильтр по площади
+
+    # Фильтр по площади (слайдер)
     area_min_global = float(df['total_meters'].min())
     area_max_global = float(df['total_meters'].max())
     area_range = st.slider("Площадь (м²)", area_min_global, area_max_global, (area_min_global, area_max_global))
     df = df[(df['total_meters'] >= area_range[0]) & (df['total_meters'] <= area_range[1])]
-    
-    # Фильтр по цене за м²
+
+    # Фильтр по цене за м² (слайдер)
     price_sqm_min = int(df['price_per_sqm'].min())
     price_sqm_max = int(df['price_per_sqm'].max())
     price_sqm_range = st.slider("Цена за м² (₽)", price_sqm_min, price_sqm_max, (price_sqm_min, price_sqm_max))
     df = df[(df['price_per_sqm'] >= price_sqm_range[0]) & (df['price_per_sqm'] <= price_sqm_range[1])]
-    
-    # Фильтр по району (если есть колонка)
+
+    # Динамический фильтр по районам
     if 'district' in df.columns and not df['district'].isnull().all():
-        districts = sorted(df['district'].dropna().unique())
-        if len(districts) > 0:
-            selected_districts = st.multiselect("Район / округ (можно несколько)", districts)
+        # Получаем список всех районов из отфильтрованного DataFrame
+        available_districts = sorted(df['district'].dropna().unique())
+        if available_districts:
+            selected_districts = st.multiselect("Район (можно несколько)", available_districts)
             if selected_districts:
                 df = df[df['district'].isin(selected_districts)]
-    
+
     # Фильтр по метро
     if 'underground' in df.columns and not df['underground'].isnull().all():
-        metros = sorted(df['underground'].dropna().unique())
-        if len(metros) > 0:
-            selected_metros = st.multiselect("Ближайшее метро", metros)
+        available_metros = sorted(df['underground'].dropna().unique())
+        if available_metros:
+            selected_metros = st.multiselect("Ближайшее метро", available_metros)
             if selected_metros:
                 df = df[df['underground'].isin(selected_metros)]
-    
+
     # Фильтр по этажу
     if 'floor' in df.columns and not df['floor'].isnull().all():
         floor_min = int(df['floor'].min())
@@ -168,7 +194,7 @@ if st.session_state.parsing_done and st.session_state.data is not None:
         if floor_min != floor_max:
             floor_range = st.slider("Этаж", floor_min, floor_max, (floor_min, floor_max))
             df = df[(df['floor'] >= floor_range[0]) & (df['floor'] <= floor_range[1])]
-    
+
     # Сортировка
     st.subheader("📈 Сортировка")
     sort_col1, sort_col2 = st.columns([3, 1])
@@ -185,12 +211,12 @@ if st.session_state.parsing_done and st.session_state.data is not None:
         )
     with sort_col2:
         sort_order = st.radio("Порядок", options=['По возрастанию', 'По убыванию'])
-    
+
     ascending = (sort_order == 'По возрастанию')
     df = df.sort_values(by=sort_by, ascending=ascending)
-    
+
     st.info(f"📌 Показано {len(df)} объявлений после всех фильтров")
-    
+
     # --- Подготовка таблицы для отображения ---
     display_cols = []
     rename_map = {}
@@ -221,20 +247,20 @@ if st.session_state.parsing_done and st.session_state.data is not None:
     if 'url' in df.columns:
         display_cols.append('url')
         rename_map['url'] = 'Ссылка'
-    
+
     df_display = df[display_cols].copy()
     df_display = df_display.rename(columns=rename_map)
-    
-    # Форматирование чисел
+
+    # Форматирование чисел для красивого отображения
     if 'Цена (₽)' in df_display.columns:
         df_display['Цена (₽)'] = df_display['Цена (₽)'].apply(lambda x: f"{x:,.0f}")
     if 'Цена за м² (₽)' in df_display.columns:
         df_display['Цена за м² (₽)'] = df_display['Цена за м² (₽)'].apply(lambda x: f"{x:,.0f}")
     if 'Площадь (м²)' in df_display.columns:
         df_display['Площадь (м²)'] = df_display['Площадь (м²)'].apply(lambda x: f"{x:.1f}")
-    
+
     st.dataframe(df_display, use_container_width=True, height=500)
-    
+
     # --- Экспорт данных ---
     st.markdown("---")
     st.subheader("💾 Экспорт")
