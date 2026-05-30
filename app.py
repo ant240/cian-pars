@@ -5,7 +5,7 @@ from datetime import datetime
 
 # --- Настройка страницы ---
 st.set_page_config(page_title="Аналитика недвижимости", layout="wide")
-st.title("🏠 Аналитика недвижимости")
+st.title("GRADOV MARKET DATA")
 st.markdown("---")
 
 # --- Инициализация состояния сессии ---
@@ -16,7 +16,7 @@ if 'parsing_done' not in st.session_state:
 
 # --- Боковая панель с настройками ---
 with st.sidebar:
-    st.header("⚙️ Настройки поиска")
+    st.header("Настройки поиска")
     city = st.text_input("Город", value="Москва")
 
     st.subheader("Параметры парсинга")
@@ -273,7 +273,7 @@ if st.session_state.parsing_done and st.session_state.data is not None:
     )
 else:
     if not st.session_state.parsing_done:
-        st.info("ℹ️ Нажмите «Начать парсинг» в боковой панели. Рекомендуем начальную страницу = 1, конечную = 1-2.")
+        st.info("ℹ️ Нажмите «Начать анализ» в боковой панели. Рекомендуем начальную страницу = 1, конечную = 1-2.")
 
 st.markdown("---")
 st.caption("🔍 Данные собираются с ЦИАН. При долгом ожидании или отсутствии результатов — возможно, сайт временно блокирует IP. Для стабильной работы нужны прокси.")
