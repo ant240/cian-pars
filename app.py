@@ -3,68 +3,72 @@ import pandas as pd
 import cianparser
 from datetime import datetime
 
-# --- Скрыть меню и футер Streamlit (для мобильных) ---
-hide_streamlit_style = """
-    <style>
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    .stDeployButton {display: none;}
-    </style>
-"""
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
-
-# --- Настройка страницы ---
-st.set_page_config(page_title="Аналитика недвижимости", layout="centered", initial_sidebar_state="auto")
-st.title("🏠 Аналитика недвижимости (Циан)")
+st.set_page_config(page_title="Аналитика недвижимости", layout="wide")
+st.title("🏠 Аналитика недвижимости")
 st.markdown("---")
 
-# --- Инициализация ---
 if 'data' not in st.session_state:
     st.session_state.data = None
 if 'parsing_done' not in st.session_state:
     st.session_state.parsing_done = False
 
-# --- Боковая панель ---
 with st.sidebar:
     st.header("⚙️ Настройки")
-    city = st.text_input("Город", value="Москва")
-    
-    property_type = st.radio("Тип недвижимости", ["Квартиры", "Дома и участки", "Коммерческая"])
-    
-    st.subheader("Параметры")
-    start_page = st.number_input("Начальная страница", 1, 1)
-    end_page = st.number_input("Конечная страница", 1, 2, help="1-2 для теста")
-    
-    if property_type == "Квартиры":
-        rooms = st.multiselect("Комнаты", [1,2,3,4,5,6], default=[1,2,3])
-    else:
-        rooms = [1]
-    
-    st.subheader("Фильтры (до парсинга)")
-    min_price = st.number_input("Мин. цена (₽)", 0, 0)
-    max_price = st.number_input("Макс. цена (₽)", 0, 0)
-    min_area = st.number_input("Мин. площадь (м²)", 0.0, 0.0)
-    max_area = st.number_input("Макс. площадь (м²)", 0.0, 0.0)
-    
-    st.subheader("Спецопции (по описанию)")
-    is_penthouse = st.checkbox("🏢 Пентхаус")
-    has_terrace = st.checkbox("🌿 Терраса/балкон")
-    
-    parse_button = st.button("🚀 Начать парсинг", type="primary")
+    city = st.text_input("Город", "Москва")
+    start_page = st.number_input("Страница от", 1, 1)
+    end_page = st.number_input("Страница до", 1, 2, help="1-2 для теста")
+    rooms = st.multiselect("Комнаты", [1,2,3,4,5,6], [1])
+    min_price = st.number_input("Мин. цена", 0, 0)
+    max_price = st.number_input("Макс. цена", 0, 0)
+    min_area = st.number_input("Мин. площадь", 0.0, 0.0)
+    max_area = st.number_input("Макс. площадь", 0.0, 0.0)
+    parse_button = st.button("🚀 Парсинг")
 
-# --- Функции парсинга и обработки ---
-def parse_property(city, ptype, rooms, start, end):
+def parse_data():
     try:
         parser = cianparser.CianParser(location=city)
-        settings = {"start_page": start, "end_page": end}
-        if ptype == "Квартиры":
-            return parser.get_flats(deal_type="sale", rooms=tuple(rooms), additional_settings=settings)
-        elif ptype == "Дома и участки":
-            try:
-                return parser.get_suburban(deal_type="sale", additional_settings=settings)
-            except:
-                return parser.get_flats(deal_type="sale", rooms=(1,), additional_settings=settings)
+        data = parser.get_flats(
+            deal_type="sale",
+            rooms=tuple(rooms),
+            additional_settings={"start_page": start_page, "end_page": end_page}
+        )
+        return data
+    except Exception as e:
+        st.error(f"Ошибка: {e}")
+        return None
+
+if parse_button:
+    raw = parse_data()
+    if raw and len(raw) > 0:
+        df = pd.DataFrame(raw)
+        df['price'] = pd.to_numeric(df['price'], errors='coerce')
+        df['total_meters'] = pd.to_numeric(df['total_meters'], errors='coerce')
+        df = df.dropna(subset=['price', 'total_meters'])
+        if len(df) > 0:
+            df['price_per_sqm'] = df['price'] / df['total_meters']
+            if min_price > 0:
+                df = df[df['price'] >= min_price]
+            if max_price > 0:
+                df = df[df['price'] <= max_price]
+            if min_area > 0:
+                df = df[df['total_meters'] >= min_area]
+            if max_area > 0:
+                df = df[df['total_meters'] <= max_area]
+            st.session_state.data = df
+            st.session_state.parsing_done = True
+            st.success(f"Загружено {len(df)} объявлений")
+        else:
+            st.warning("Нет данных после фильтрации")
+    else:
+        st.warning("Данных нет (блокировка)")
+
+if st.session_state.parsing_done and st.session_state.data is not None:
+    df = st.session_state.data
+    st.dataframe(df[['residential_complex','rooms','total_meters','price','price_per_sqm']], use_container_width=True)
+    csv = df.to_csv(index=False)
+    st.download_button("Скачать CSV", csv, "data.csv")
+else:
+    st.info("Нажмите Парсинг")                return parser.get_flats(deal_type="sale", rooms=(1,), additional_settings=settings)
         else:
             try:
                 return parser.get_commercial(deal_type="sale", additional_settings=settings)
