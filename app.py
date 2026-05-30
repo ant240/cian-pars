@@ -3,7 +3,7 @@ import pandas as pd
 import cianparser
 from datetime import datetime
 
-# --- Скрыть элементы Streamlit (меню, футер) ---
+# --- Скрыть меню и футер Streamlit (для мобильных) ---
 hide_streamlit_style = """
     <style>
     #MainMenu {visibility: hidden;}
@@ -14,12 +14,8 @@ hide_streamlit_style = """
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# --- Настройка страницы (адаптивная) ---
-st.set_page_config(
-    page_title="Аналитика недвижимости",
-    layout="centered",
-    initial_sidebar_state="auto"
-)
+# --- Настройка страницы ---
+st.set_page_config(page_title="Аналитика недвижимости", layout="centered", initial_sidebar_state="auto")
 st.title("🏠 Аналитика недвижимости (Циан)")
 st.markdown("---")
 
@@ -34,10 +30,7 @@ with st.sidebar:
     st.header("⚙️ Настройки")
     city = st.text_input("Город", value="Москва")
     
-    property_type = st.radio(
-        "Тип недвижимости",
-        ["Квартиры", "Дома и участки", "Коммерческая"]
-    )
+    property_type = st.radio("Тип недвижимости", ["Квартиры", "Дома и участки", "Коммерческая"])
     
     st.subheader("Параметры")
     start_page = st.number_input("Начальная страница", 1, 1)
@@ -60,7 +53,7 @@ with st.sidebar:
     
     parse_button = st.button("🚀 Начать парсинг", type="primary")
 
-# --- Функция парсинга ---
+# --- Функции парсинга и обработки ---
 def parse_property(city, ptype, rooms, start, end):
     try:
         parser = cianparser.CianParser(location=city)
@@ -129,7 +122,7 @@ if parse_button:
         else:
             st.warning("Не удалось получить данные (блокировка или пустой ответ)")
 
-# --- Отображение данных с защитой от пустых слайдеров ---
+# --- Отображение результатов с безопасными слайдерами ---
 if st.session_state.parsing_done and st.session_state.data is not None:
     df = st.session_state.data.copy()
     if len(df) == 0:
@@ -138,7 +131,6 @@ if st.session_state.parsing_done and st.session_state.data is not None:
     
     st.markdown("---")
     st.header("📊 Результаты")
-    
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Всего", len(df))
     col2.metric("Средняя цена", f"{df['price'].mean():,.0f} ₽")
@@ -148,28 +140,22 @@ if st.session_state.parsing_done and st.session_state.data is not None:
     st.markdown("---")
     st.subheader("🔍 Уточняющие фильтры")
     
-    # --- Слайдеры только если min < max и значения конечны ---
-    price_min = df['price'].min()
-    price_max = df['price'].max()
-    if pd.notna(price_min) and pd.notna(price_max) and price_min < price_max:
-        price_range = st.slider("Цена (₽)", float(price_min), float(price_max), (float(price_min), float(price_max)))
+    # --- Цена ---
+    if df['price'].min() < df['price'].max():
+        price_range = st.slider("Цена (₽)", float(df['price'].min()), float(df['price'].max()), (float(df['price'].min()), float(df['price'].max())))
         df = df[(df['price'] >= price_range[0]) & (df['price'] <= price_range[1])]
-    else:
-        st.info("Недостаточно данных для фильтра по цене")
     
-    area_min = df['total_meters'].min()
-    area_max = df['total_meters'].max()
-    if pd.notna(area_min) and pd.notna(area_max) and area_min < area_max:
-        area_range = st.slider("Площадь (м²)", float(area_min), float(area_max), (float(area_min), float(area_max)))
+    # --- Площадь ---
+    if df['total_meters'].min() < df['total_meters'].max():
+        area_range = st.slider("Площадь (м²)", float(df['total_meters'].min()), float(df['total_meters'].max()), (float(df['total_meters'].min()), float(df['total_meters'].max())))
         df = df[(df['total_meters'] >= area_range[0]) & (df['total_meters'] <= area_range[1])]
     
-    sqm_min = df['price_per_sqm'].min()
-    sqm_max = df['price_per_sqm'].max()
-    if pd.notna(sqm_min) and pd.notna(sqm_max) and sqm_min < sqm_max:
-        sqm_range = st.slider("Цена за м² (₽)", float(sqm_min), float(sqm_max), (float(sqm_min), float(sqm_max)))
+    # --- Цена за м² ---
+    if df['price_per_sqm'].min() < df['price_per_sqm'].max():
+        sqm_range = st.slider("Цена за м² (₽)", float(df['price_per_sqm'].min()), float(df['price_per_sqm'].max()), (float(df['price_per_sqm'].min()), float(df['price_per_sqm'].max())))
         df = df[(df['price_per_sqm'] >= sqm_range[0]) & (df['price_per_sqm'] <= sqm_range[1])]
     
-    # Фильтры по району, метро, этажу (с проверками)
+    # --- Район ---
     if 'district' in df.columns and not df['district'].isnull().all():
         districts = sorted(df['district'].dropna().unique())
         if districts:
@@ -177,6 +163,7 @@ if st.session_state.parsing_done and st.session_state.data is not None:
             if sel_districts:
                 df = df[df['district'].isin(sel_districts)]
     
+    # --- Метро ---
     if 'underground' in df.columns and not df['underground'].isnull().all():
         metros = sorted(df['underground'].dropna().unique())
         if metros:
@@ -184,6 +171,7 @@ if st.session_state.parsing_done and st.session_state.data is not None:
             if sel_metros:
                 df = df[df['underground'].isin(sel_metros)]
     
+    # --- Этаж ---
     if 'floor' in df.columns and not df['floor'].isnull().all():
         floor_min = int(df['floor'].min())
         floor_max = int(df['floor'].max())
@@ -191,7 +179,7 @@ if st.session_state.parsing_done and st.session_state.data is not None:
             floor_range = st.slider("Этаж", floor_min, floor_max, (floor_min, floor_max))
             df = df[(df['floor'] >= floor_range[0]) & (df['floor'] <= floor_range[1])]
     
-    # Сортировка
+    # --- Сортировка ---
     st.subheader("📈 Сортировка")
     sort_col1, sort_col2 = st.columns([3,1])
     with sort_col1:
@@ -203,7 +191,7 @@ if st.session_state.parsing_done and st.session_state.data is not None:
     
     st.info(f"📌 Показано {len(df)} объявлений")
     
-    # Отображение таблицы
+    # --- Таблица ---
     cols_to_show = []
     rename = {}
     for col, name in [('residential_complex','ЖК'),('rooms','Комнат'),('total_meters','Площадь (м²)'),
@@ -220,16 +208,14 @@ if st.session_state.parsing_done and st.session_state.data is not None:
         df_display['Площадь (м²)'] = df_display['Площадь (м²)'].apply(lambda x: f"{x:.1f}")
     st.dataframe(df_display, use_container_width=True, height=500)
     
-    # Экспорт
+    # --- Экспорт ---
     st.markdown("---")
     st.subheader("💾 Экспорт")
     csv_data = df.to_csv(index=False, encoding='utf-8-sig')
-    st.download_button("📥 Скачать CSV", csv_data,
-                       file_name=f"real_estate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                       mime="text/csv")
+    st.download_button("📥 Скачать CSV", csv_data, file_name=f"real_estate_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv", mime="text/csv")
 else:
     if not st.session_state.parsing_done:
-        st.info("Нажмите «Начать парсинг» в боковой панели. Для теста ставьте конечную страницу = 1-2.")
+        st.info("Нажмите «Начать парсинг» в боковой панели. Рекомендуем конечную страницу = 1.")
 
 st.markdown("---")
 st.caption("Данные с ЦИАН. При блокировке IP нужны прокси. Пентхаусы/террасы — по описанию.")
