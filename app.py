@@ -3,55 +3,55 @@ import requests
 import random
 import os
 
-st.set_page_config(page_title="Проверка прокси")
-
-st.title("Диагностика прокси")
+st.title("Проверка 20 прокси")
 
 def load_proxies():
-    if not os.path.exists("proxies.txt"):
-        return []
-
     with open("proxies.txt", "r") as f:
-        return [line.strip() for line in f if line.strip()]
+        return [x.strip() for x in f if x.strip()]
 
 proxies = load_proxies()
 
-st.write(f"Прокси загружено: {len(proxies)}")
+st.write("Всего прокси:", len(proxies))
 
-if not proxies:
-    st.error("Файл proxies.txt не найден")
-    st.stop()
+if st.button("Проверить 20 прокси"):
 
-if st.button("Запустить тест"):
+    sample = random.sample(
+        proxies,
+        min(20, len(proxies))
+    )
 
-    proxy = random.choice(proxies)
+    working = 0
+    failed = 0
 
-    st.write("Тестируем прокси:")
-    st.code(proxy)
+    for i, proxy in enumerate(sample):
 
-    try:
+        try:
 
-        response = requests.get(
-            "https://api.ipify.org?format=json",
-            proxies={
-                "http": proxy,
-                "https": proxy
-            },
-            timeout=20
-        )
+            r = requests.get(
+                "https://api.ipify.org?format=json",
+                proxies={
+                    "http": proxy,
+                    "https": proxy
+                },
+                timeout=10
+            )
 
-        st.success("Прокси отвечает")
+            st.success(
+                f"{i+1}. OK {r.status_code}"
+            )
 
-        st.write("HTTP статус:")
+            working += 1
 
-        st.code(response.status_code)
+        except Exception as e:
 
-        st.write("Ответ:")
+            st.error(
+                f"{i+1}. FAIL"
+            )
 
-        st.code(response.text)
+            st.code(str(e))
 
-    except Exception as e:
+            failed += 1
 
-        st.error("Прокси не работает")
-
-        st.code(str(e))
+    st.write("---")
+    st.write("Рабочих:", working)
+    st.write("Не рабочих:", failed)
