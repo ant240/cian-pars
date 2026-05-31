@@ -68,4 +68,12 @@ try:
                 st.text_area(f"Скрипт {i}", script.string[:2000], height=200)
     
 except Exception as e:
+    st.error(f"Ошибка: {e}")    
+    if not found:
+        st.warning("Не удалось найти JSON. Показываю первые 5 скриптов с содержимым:")
+        for i, script in enumerate(scripts[:5]):
+            if script.string and len(script.string) > 100:
+                st.text_area(f"Скрипт {i}", script.string[:2000], height=200)
+    
+except Exception as e:
     st.error(f"Ошибка: {e}")
