@@ -1,71 +1,74 @@
 import streamlit as st
-import pandas as pd
-import cianparser
-from datetime import datetime
-import time
+import requests
 import random
 import os
-from typing import List, Optional
+from bs4 import BeautifulSoup
 
-st.set_page_config(page_title="GRADOV FLATS", layout="centered", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="GRADOV FLATS - Тест прямого парсинга")
+st.title("GRADOV FLATS - Прямой запрос к ЦИАН")
 
-hide_streamlit_style = """
-    <style>
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    header {visibility: hidden;}
-    .stDeployButton {display: none;}
-    .stApp > header {display: none;}
-    .stApp > div:first-child {display: none;}
-    .stApp { margin-bottom: -50px; }
-    .main .block-container {
-        padding-top: 1rem;
-        padding-bottom: 0rem;
-        padding-left: 0.5rem;
-        padding-right: 0.5rem;
-        max-width: 100%;
-    }
-    body { background-color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-    h1, h2, h3, .stMarkdown { color: #1a1a1a; }
-    .stButton > button {
-        background-color: #000000;
-        color: white;
-        border-radius: 40px;
-        border: none;
-        padding: 0.5rem 1rem;
-        font-weight: 500;
-        width: 100%;
-    }
-    .stButton > button:hover { background-color: #333333; }
-    .stSelectbox, .stMultiSelect, .stNumberInput, .stSlider { margin-bottom: 0.5rem; }
-    .stMetric {
-        background-color: #f8f9fa;
-        border-radius: 16px;
-        padding: 0.5rem;
-        text-align: center;
-    }
-    </style>
-"""
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+def load_proxies():
+    if os.path.exists("proxies.txt"):
+        with open("proxies.txt", "r") as f:
+            return [line.strip() for line in f if line.strip()]
+    return None
 
-st.markdown("""
-    <div style='text-align: center; margin-bottom: 1rem;'>
-        <h1 style='font-size: 2rem; font-weight: 600; margin-bottom: 0;'>GRADOV FLATS</h1>
-        <p style='color: #666; margin-top: 0;'>Аналитика рынка недвижимости Москвы</p>
-    </div>
-    <hr style='margin: 0.5rem 0;'>
-""", unsafe_allow_html=True)
+proxies = load_proxies()
+if not proxies:
+    st.error("Файл proxies.txt не найден!")
+    st.stop()
 
-if 'data' not in st.session_state:
-    st.session_state.data = None
-if 'data_loaded' not in st.session_state:
-    st.session_state.data_loaded = False
+# Берём случайный прокси
+proxy = random.choice(proxies)
+st.info(f"Используется прокси: {proxy[:80]}...")
 
-def load_proxies_from_file(filename: str = "proxies.txt") -> Optional[List[str]]:
-    if os.path.exists(filename):
-        with open(filename, 'r', encoding='utf-8') as f:
-            proxies = [line.strip() for line in f if line.strip()]
-        return proxies
+# Преобразуем строку прокси в формат для requests
+# Строка вида http://user:pass@host:port
+try:
+    proxy_dict = {"http": proxy, "https": proxy}
+except:
+    st.error("Неверный формат прокси. Должен начинаться с http://")
+    st.stop()
+
+# Целевой URL страницы поиска (однушки в Москве)
+url = "https://cian.ru/cat.php?deal_type=sale&engine_version=2&offer_type=flat&p=1&region=1&room1=1"
+
+# Заголовки, имитирующие реальный браузер
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+}
+
+try:
+    with st.spinner("Отправка запроса к ЦИАН..."):
+        response = requests.get(url, headers=headers, proxies=proxy_dict, timeout=15)
+    
+    st.write(f"**HTTP статус:** {response.status_code}")
+    
+    if response.status_code == 200:
+        st.success("✅ Запрос успешен! Анализируем HTML...")
+        # Показываем первые 500 символов для диагностики
+        st.text_area("Первые 500 символов ответа:", response.text[:500], height=200)
+        
+        # Попробуем найти первые ссылки на объявления
+        soup = BeautifulSoup(response.text, 'html.parser')
+        # Ищем ссылки на объявления (обычно class _93444fe79c)
+        links = soup.find_all('a', href=True)
+        flat_links = [a['href'] for a in links if '/sale/flat/' in a['href']]
+        st.write(f"**Найдено ссылок на объявления:** {len(set(flat_links))}")
+        if flat_links:
+            st.success("Парсинг работает! Можно собирать детали.")
+        else:
+            st.warning("Ссылки на объявления не найдены — возможно, изменилась разметка.")
+    else:
+        st.error(f"Ошибка HTTP {response.status_code}. Возможно, прокси не работает или ЦИАН блокирует.")
+        
+except Exception as e:
+    st.error(f"Исключение: {e}")        return proxies
     return None
 
 @st.cache_data(ttl=3600, show_spinner=False)
