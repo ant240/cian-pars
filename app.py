@@ -3,55 +3,54 @@ import requests
 import random
 import os
 
-st.title("Проверка 20 прокси")
+st.set_page_config(page_title="Тест ЦИАН")
 
-def load_proxies():
-    with open("proxies.txt", "r") as f:
-        return [x.strip() for x in f if x.strip()]
+st.title("Проверка доступа к ЦИАН")
 
-proxies = load_proxies()
+if not os.path.exists("proxies.txt"):
+    st.error("Файл proxies.txt не найден")
+    st.stop()
 
-st.write("Всего прокси:", len(proxies))
+with open("proxies.txt", "r") as f:
+    proxies = [x.strip() for x in f if x.strip()]
 
-if st.button("Проверить 20 прокси"):
+st.write(f"Прокси загружено: {len(proxies)}")
 
-    sample = random.sample(
-        proxies,
-        min(20, len(proxies))
-    )
+proxy = random.choice(proxies)
 
-    working = 0
-    failed = 0
+st.code(proxy)
 
-    for i, proxy in enumerate(sample):
+proxy_dict = {
+    "http": f"http://{proxy}",
+    "https": f"http://{proxy}"
+}
 
-        try:
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/137.0 Safari/537.36"
+}
 
-            r = requests.get(
-                "https://api.ipify.org?format=json",
-                proxies={
-                    "http": proxy,
-                    "https": proxy
-                },
-                timeout=10
-            )
+if st.button("Проверить ЦИАН"):
+    try:
 
-            st.success(
-                f"{i+1}. OK {r.status_code}"
-            )
+        url = "https://www.cian.ru/"
 
-            working += 1
+        r = requests.get(
+            url,
+            headers=headers,
+            proxies=proxy_dict,
+            timeout=20
+        )
 
-        except Exception as e:
+        st.success(f"HTTP статус: {r.status_code}")
 
-            st.error(
-                f"{i+1}. FAIL"
-            )
+        st.write("Размер ответа:")
+        st.write(len(r.text))
 
-            st.code(str(e))
+        st.text_area(
+            "Первые 1000 символов",
+            r.text[:1000],
+            height=300
+        )
 
-            failed += 1
-
-    st.write("---")
-    st.write("Рабочих:", working)
-    st.write("Не рабочих:", failed)
+    except Exception as e:
+        st.error(str(e))
