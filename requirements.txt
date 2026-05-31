@@ -1,4 +1,4 @@
-git+https://github.com/SC1DR-OFFICIAL/cianparser-with-headers.git
+streamlit==1.36.0
 pandas
 openpyxl
-streamlit
+git+https://github.com/SC1DR-OFFICIAL/cianparser-with-headers.git
