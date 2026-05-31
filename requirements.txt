@@ -3,3 +3,4 @@ requests
 beautifulsoup4
 pandas
 openpyxl
+git+https://github.com/SC1DR-OFFICIAL/cianparser-with-headers.git
