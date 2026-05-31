@@ -7,14 +7,14 @@ import random
 import os
 from typing import List, Optional
 
-# ======================= НАСТРОЙКИ СТРАНИЦЫ (для мобильных) =======================
+# ======================= МОБИЛЬНАЯ АДАПТАЦИЯ И СТИЛЬ UBER =======================
 st.set_page_config(
     page_title="GRADOV FLATS",
-    layout="centered",           # центрирование на мобильных
-    initial_sidebar_state="collapsed"  # боковая панель скрыта по умолчанию
+    layout="centered",
+    initial_sidebar_state="collapsed"
 )
 
-# --- Полностью скрываем все элементы Streamlit (меню, футер, деплой) ---
+# Полностью скрываем все стандартные элементы Streamlit (меню, футер, деплой)
 hide_streamlit_style = """
     <style>
     #MainMenu {visibility: hidden;}
@@ -27,14 +27,15 @@ hide_streamlit_style = """
     .stApp {
         margin-bottom: -50px;
     }
-    /* Убираем все возможные боковые отступы на мобильных */
+    /* Адаптивные отступы для мобильных */
     .main .block-container {
         padding-top: 1rem;
         padding-bottom: 0rem;
         padding-left: 0.5rem;
         padding-right: 0.5rem;
+        max-width: 100%;
     }
-    /* Стили в стиле Uber */
+    /* Стиль Uber */
     body {
         background-color: #ffffff;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -82,7 +83,7 @@ if 'data' not in st.session_state:
 if 'data_loaded' not in st.session_state:
     st.session_state.data_loaded = False
 
-# ======================= СПИСКИ РАЙОНОВ И МЕТРО (можно расширять) =======================
+# ======================= СПИСКИ РАЙОНОВ И МЕТРО =======================
 MOSCOW_DISTRICTS = [
     "Раменки", "Арбат", "Пресненский", "Тверской", "Хамовники", "Якиманка",
     "Басманный", "Замоскворечье", "Мещанский", "Таганский", "Аэропорт", "Беговой",
@@ -123,7 +124,7 @@ MOSCOW_METRO = [
     "Таганская", "Павелецкая", "Добрынинская", "Октябрьская"
 ]
 
-# ======================= ФУНКЦИЯ ЗАГРУЗКИ ПРОКСИ (скрыто) =======================
+# ======================= ЗАГРУЗКА ПРОКСИ ИЗ ФАЙЛА (ОБЯЗАТЕЛЬНО, ЕСЛИ ФАЙЛ ЕСТЬ) =======================
 def load_proxies_from_file(filename: str = "proxies.txt") -> Optional[List[str]]:
     if os.path.exists(filename):
         with open(filename, 'r', encoding='utf-8') as f:
@@ -135,7 +136,7 @@ def load_proxies_from_file(filename: str = "proxies.txt") -> Optional[List[str]]
 def load_all_data(city: str, rooms: List[int], proxy_pool: Optional[List[str]] = None) -> Optional[pd.DataFrame]:
     all_data = []
     page = 1
-    max_pages = 100
+    max_pages = 100  # защита от бесконечности
     
     funny_phrases = [
         "Ищем собственников, а не риелторов...",
@@ -178,19 +179,19 @@ def load_all_data(city: str, rooms: List[int], proxy_pool: Optional[List[str]] =
             
             time.sleep(random.uniform(0.8, 1.5))
             
-            # Параметр rooms: если список пуст, передаём (0,1,2,3,4,5,6) – все варианты включая студию
+            # Если список комнат пуст — парсим все (включая студию 0)
             rooms_tuple = tuple(rooms) if rooms else (0,1,2,3,4,5,6)
             data = parser.get_flats(
                 deal_type="sale",
                 rooms=rooms_tuple,
                 additional_settings={"start_page": i, "end_page": i},
-                is_by_homeowner=True
+                is_by_homeowner=True  # Только собственники — больше шансов на телефон
             )
             if data and len(data) > 0:
                 all_data.extend(data)
                 progress_bar.progress(min(1.0, i / 70))
             else:
-                status_placeholder.info("✅ Все страницы обработаны!")
+                status_placeholder.info("✅ Все доступные страницы обработаны!")
                 break
         except Exception:
             continue
@@ -227,13 +228,12 @@ def load_all_data(city: str, rooms: List[int], proxy_pool: Optional[List[str]] =
     else:
         df['property_type'] = 'Не указано'
     
-    # Приведение названия ЖК к строке
     if 'residential_complex' in df.columns:
         df['residential_complex'] = df['residential_complex'].fillna('Не указан')
     
     return df
 
-# ======================= ФУНКЦИИ ФИЛЬТРАЦИИ И ОТОБРАЖЕНИЯ =======================
+# ======================= ФИЛЬТРАЦИЯ =======================
 def filter_data(df, filters):
     df_filtered = df.copy()
     if filters['price_range']:
@@ -265,7 +265,7 @@ def display_results(df):
     col3.metric("Ср. цена за м²", f"{df['price_per_sqm'].mean():,.0f} ₽")
     col4.metric("Ср. площадь", f"{df['total_meters'].mean():.1f} м²")
     
-    # Какие колонки показывать (включая телефон и ЖК)
+    # Колонки для отображения (включая телефон и ЖК)
     display_cols = []
     rename_map = {}
     for col, name in [('residential_complex','ЖК'), ('rooms','Комнат'), ('total_meters','Площадь, м²'),
@@ -352,13 +352,14 @@ def valuation_calculator(df):
 tab1, tab2 = st.tabs(["📊 Анализ рынка (найти)", "🏡 Оценка квартиры (продать)"])
 
 with tab1:
-    # В боковой панели (на мобильных она скрыта, но можно раскрыть через стрелку)
+    # Боковая панель (на мобильных скрыта по умолчанию, но доступна через стрелку)
     with st.sidebar:
         st.markdown("### 🔍 Параметры поиска")
         city = st.text_input("Город", value="Москва")
-        # Комнаты: пустое значение = все (включая студии)
-        rooms = st.multiselect("Количество комнат (пусто = все)", options=[0,1,2,3,4,5,6], 
-                               format_func=lambda x: "Студия" if x==0 else f"{x}", default=[])
+        rooms = st.multiselect("Количество комнат (пусто = все, включая студии)", 
+                               options=[0,1,2,3,4,5,6], 
+                               format_func=lambda x: "Студия" if x==0 else f"{x}", 
+                               default=[])
         load_button = st.button("🚀 Загрузить данные", type="primary", use_container_width=True)
         st.markdown("---")
         st.markdown("### 🎯 Расширенные фильтры")
@@ -368,8 +369,13 @@ with tab1:
         if not city:
             st.error("Укажите город.")
         else:
+            # Автоматически загружаем прокси из файла (он есть — вы его создали)
+            proxy_pool = load_proxies_from_file()
+            if proxy_pool:
+                st.info(f"🔒 Используется {len(proxy_pool)} прокси для стабильной загрузки.")
+            else:
+                st.info("⚠️ Прокси не найдены. Загрузка может быть медленной.")
             with st.spinner("Загрузка данных..."):
-                proxy_pool = load_proxies_from_file()
                 df = load_all_data(city, rooms, proxy_pool)
                 if df is not None and len(df) > 0:
                     st.session_state.data = df
@@ -382,6 +388,7 @@ with tab1:
     if st.session_state.data_loaded and st.session_state.data is not None:
         df = st.session_state.data
         
+        # Словарь для хранения текущих значений фильтров
         filters = {
             'price_range': None, 'area_range': None, 'sqm_range': None,
             'floor_range': None, 'year_range': None,
@@ -403,17 +410,17 @@ with tab1:
             if 'build_year' in df.columns and not df['build_year'].isnull().all():
                 ymin = int(df['build_year'].min()); ymax = int(df['build_year'].max())
                 if ymin < ymax:
-                    filters['year_range'] = st.slider("Год", ymin, ymax, (ymin, ymax))
+                    filters['year_range'] = st.slider("Год постройки", ymin, ymax, (ymin, ymax))
         with col2:
             prop_types = sorted(df['property_type'].unique())
             if prop_types:
-                filters['property_types'] = st.multiselect("Тип", prop_types, default=prop_types)
+                filters['property_types'] = st.multiselect("Тип недвижимости", prop_types, default=prop_types)
             if 'district' in df.columns and not df['district'].isnull().all():
                 districts_avail = sorted(df['district'].dropna().unique())
                 filters['districts'] = st.multiselect("Районы", districts_avail)
             if 'underground' in df.columns and not df['underground'].isnull().all():
                 metros_avail = sorted(df['underground'].dropna().unique())
-                filters['metros'] = st.multiselect("Метро", metros_avail)
+                filters['metros'] = st.multiselect("Станции метро", metros_avail)
         
         df_filtered = filter_data(df, filters)
         
