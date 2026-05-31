@@ -21,8 +21,8 @@ proxy = random.choice(proxies)
 st.code(proxy)
 
 proxy_dict = {
-    "http": f"http://{proxy}",
-    "https": f"http://{proxy}"
+    "http": proxy,
+    "https": proxy
 }
 
 headers = {
