@@ -88,7 +88,7 @@ def load_proxies_from_file(filename: str = "proxies.txt") -> Optional[List[str]]
         return proxies
     return None
 
-# ======================= ПАРСИНГ ДАННЫХ (С КЭШИРОВАНИЕМ) =======================
+# ======================= ПАРСИНГ ДАННЫХ С КЭШИРОВАНИЕМ =======================
 @st.cache_data(ttl=3600, show_spinner=False)
 def load_all_data(city: str, rooms: tuple) -> Optional[pd.DataFrame]:
     """
@@ -98,10 +98,10 @@ def load_all_data(city: str, rooms: tuple) -> Optional[pd.DataFrame]:
     proxy_pool = load_proxies_from_file()
     all_data = []
     page = 1
-    max_pages = 100  # защита от бесконечности
+    max_pages = 100
     
-    # Прогресс и статус (будут отображаться только при первом запуске)
-    progress_bar = st.progress(0, text="Загрузка данных...")
+    # Используем обычный st.progress() без параметра text (для совместимости)
+    progress_bar = st.progress(0)
     status_text = st.empty()
     
     for i in range(page, max_pages + 1):
@@ -292,7 +292,7 @@ def valuation_calculator(df):
 tab1, tab2 = st.tabs(["📊 Анализ рынка (найти)", "🏡 Оценка квартиры (продать)"])
 
 with tab1:
-    # Боковая панель (на мобильных скрыта по умолчанию)
+    # Боковая панель
     with st.sidebar:
         st.markdown("### 🔍 Параметры поиска")
         city = st.text_input("Город", value="Москва")
@@ -310,7 +310,6 @@ with tab1:
             st.error("Укажите город.")
         else:
             with st.spinner("Загрузка данных... Это может занять 1-2 минуты при первом запуске."):
-                # Преобразуем список комнат в кортеж для кэширования
                 rooms_tuple = tuple(rooms)
                 df = load_all_data(city, rooms_tuple)
                 if df is not None and len(df) > 0:
@@ -324,7 +323,6 @@ with tab1:
     if st.session_state.data_loaded and st.session_state.data is not None:
         df = st.session_state.data
         
-        # Словарь для фильтров
         filters = {
             'price_range': None, 'area_range': None, 'sqm_range': None,
             'floor_range': None, 'year_range': None,
