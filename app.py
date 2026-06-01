@@ -1,80 +1,70 @@
 import streamlit as st
 import pandas as pd
-import requests
-from bs4 import BeautifulSoup
-import re
 import cianparser
+from time import sleep
 
-st.set_page_config(page_title="GRADOV SEARCH — Быстрый тест", layout="wide")
-st.title("GRADOV SEARCH — Быстрый тест")
-st.caption("Москва, однокомнатные квартиры, демонстрационный тест")
+st.set_page_config(page_title="GRADOV SEARCH - Тест", layout="wide")
 
-# ------------------ Функция парсинга дополнительной информации по объекту ------------------
-def parse_extra(url):
-    """Парсинг карточки объекта для дополнительных полей"""
-    data = {}
-    try:
-        resp = requests.get(url, timeout=10)
-        soup = BeautifulSoup(resp.text, "html.parser")
-        # Примеры регулярок для ключевых полей
-        match = re.search(r'Год постройки</.*?>(\d{4})', resp.text)
-        data["build_year"] = int(match.group(1)) if match else None
-        match = re.search(r'Тип дома</.*?>(.*?)<', resp.text)
-        data["building_type"] = match.group(1).strip() if match else None
-        match = re.search(r'До метро</.*?>(\d+)\s*мин', resp.text)
-        data["time_to_metro"] = int(match.group(1)) if match else None
-        match = re.search(r'Отделка</.*?>(.*?)<', resp.text)
-        data["finish"] = match.group(1).strip() if match else None
-        match = re.search(r'Высота потолков</.*?>([\d\.]+)', resp.text)
-        data["ceiling_height"] = float(match.group(1)) if match else None
-        match = re.search(r'Дата сдачи</.*?>(.*?)<', resp.text)
-        data["completion_date"] = match.group(1).strip() if match else None
-    except Exception as e:
-        st.error(f"Ошибка парсинга {url}: {e}")
-    return data
+st.title("GRADOV SEARCH — Тестовый режим")
 
-# ------------------ Быстрый тест GRADOV SEARCH ------------------
-if st.button("Выполнить тест: 1-комнатные на Белорусской, 40-40млн"):
-    st.info("Запуск теста...")
+# --- Кнопка теста ---
+if st.button("🚀 Быстрый тест: однушки на Белорусской"):
+
+    # Индикатор загрузки
+    progress_bar = st.progress(0)
+    status_text = st.empty()
+
     # Инициализация парсера
     parser = cianparser.CianParser(location="Москва")
-    try:
-        # Берем однокомнатные квартиры
-        flats = parser.get_flats(deal_type="sale", rooms=1)
-    except TypeError:
-        st.error("Ошибка: метод get_flats требует deal_type и rooms")
-        flats = []
+    status_text.text("Создаём парсер...")
 
-    # Фильтруем только Москва
-    moscow_flats = [f for f in flats if f.get("location") == "Москва"]
-    # Пример фильтрации по району и метро (Белорусская)
-    test_flats = [
-        f for f in moscow_flats
-        if "Белорусская" in (f.get("underground") or "")
-        and f.get("total_meters", 0) >= 40
-        and f.get("price", 0) <= 40000000
+    # Быстро ограничиваем выбор: 1-комнатные, 2–5 этажи, Белорусская
+    rooms = (1,)
+    min_floor, max_floor = 2, 5
+    min_price, max_price = 0, 40_000_000
+    min_area = 40
+
+    status_text.text("Запрашиваем данные...")
+    # --- Ограничиваем парсер по страницам для ускорения ---
+    flats_raw = parser.get_flats(
+        deal_type="sale",
+        rooms=rooms,
+        additional_settings={
+            "start_page": 1,
+            "end_page": 2,  # только 2 страницы для быстрого теста
+        }
+    )
+
+    status_text.text(f"Найдено объявлений: {len(flats_raw)}")
+    progress_bar.progress(20)
+
+    # --- Преобразуем в DataFrame ---
+    df = pd.DataFrame(flats_raw)
+
+    # --- Фильтруем по улице, площади, цене, этажу ---
+    df_test = df[
+        df["street"].str.contains("Белорусская", na=False)
+        & (df["total_meters"] >= min_area)
+        & (df["price"] <= max_price)
+        & (df["floor"] >= min_floor)
+        & (df["floor"] <= max_floor)
     ]
 
-    # Дополнительно парсим карточки для тестовых объектов
-    for f in test_flats:
-        extra = parse_extra(f["url"])
-        f.update(extra)
+    progress_bar.progress(50)
+    status_text.text(f"После фильтрации: {len(df_test)} объектов")
 
-    if not test_flats:
-        st.warning("Нет объектов, удовлетворяющих условиям теста")
-    else:
-        df = pd.DataFrame(test_flats)
-        st.success(f"Объектов найдено: {len(df)}")
-        st.dataframe(df)
+    # Ограничим количество для теста
+    df_test = df_test.head(30)
+    progress_bar.progress(100)
 
-        # Проверка ошибок
-        errors = df[df[["price","total_meters","street"]].isnull().any(axis=1)]
-        if not errors.empty:
-            st.error("Некорректные данные:")
-            st.dataframe(errors)
-        else:
-            st.info("Все данные корректны")
+    st.success("✅ Тест выполнен!")
+    st.dataframe(df_test)
 
-# ------------------ Кнопка очистки ------------------
-if st.button("Очистить результаты теста"):
+    # --- Ссылки на объекты ---
+    st.markdown("### Ссылки на квартиры")
+    for i, row in df_test.iterrows():
+        st.markdown(f"- [{row['street']} {row.get('house_number','')}]( {row['url']} ) — {row['total_meters']} м², {row['price']:,} ₽, этаж {row['floor']}")
+
+# --- Кнопка очистки ---
+if st.button("🧹 Очистить тестовые поля"):
     st.experimental_rerun()
