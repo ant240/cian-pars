@@ -309,11 +309,13 @@ with tabs[2]:
     with col1:
 
         address = st.text_input(
-            "Адрес"
+            "Адрес",
+            key="sale_address"
         )
 
         metro = st.text_input(
-            "Метро"
+            "Метро",
+            key="sale_metro"
         )
 
         rooms = st.selectbox(
@@ -324,39 +326,49 @@ with tabs[2]:
 
         area = st.number_input(
             "Площадь",
-            value=50.0
+            value=50.0,
+            key="sale_area"
         )
 
         floor = st.number_input(
             "Этаж",
-            value=5
+            value=5,
+            key="sale_floor"
         )
 
     with col2:
 
         floors_count = st.number_input(
             "Этажность дома",
-            value=10
+            value=10,
+            key="sale_floors_count"
         )
 
         year_built = st.text_input(
-            "Год постройки"
+            "Год постройки",
+            key="sale_year_built"
         )
 
         house_type = st.text_input(
-            "Тип дома"
+            "Тип дома",
+            key="sale_house_type"
         )
 
         finish_type = st.text_input(
-            "Отделка"
+            "Отделка",
+            key="sale_finish_type"
         )
 
         ceiling_height = st.number_input(
             "Высота потолков",
-            value=2.7
+            value=2.7,
+            key="sale_ceiling_height"
         )
 
-    if st.button("📈 Оценить квартиру"):
+    if st.button(
+        "📈 Оценить квартиру",
+        key="sale_evaluate"
+    ):
 
         card = {
             "price": 15000000,
