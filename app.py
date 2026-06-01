@@ -3,26 +3,35 @@ import pandas as pd
 import cianparser
 import time
 
+st.set_page_config(page_title="GRADOV SEARCH TEST", layout="wide")
 
-def run_demo_test():
+
+# ---------------------------
+# КЭШ ПОСЛЕДНЕГО УСПЕШНОГО РЕЗУЛЬТАТА
+# ---------------------------
+if "last_df" not in st.session_state:
+    st.session_state.last_df = None
+
+
+# ---------------------------
+# ФУНКЦИЯ ПАРСИНГА (СТАБИЛЬНАЯ ВЕРСИЯ)
+# ---------------------------
+def safe_parse():
+
+    parser = cianparser.CianParser(location="Москва")
 
     progress = st.progress(0)
     status = st.empty()
     counter = st.empty()
 
-    parser = cianparser.CianParser(location="Москва")
-
     all_flats = []
 
-    TOTAL_PAGES = 3
+    TOTAL_PAGES = 3  # ВАЖНО: это то, что раньше у тебя РАБОТАЛО
 
     for page in range(1, TOTAL_PAGES + 1):
 
-        status.info(
-            f"Получение объявлений. Страница {page}/{TOTAL_PAGES}"
-        )
-
         try:
+            status.info(f"📡 Загрузка страницы {page}/{TOTAL_PAGES}")
 
             flats = parser.get_flats(
                 deal_type="sale",
@@ -35,86 +44,89 @@ def run_demo_test():
 
             all_flats.extend(flats)
 
-            counter.success(
-                f"Найдено объявлений: {len(all_flats)}"
-            )
+            counter.success(f"Найдено: {len(all_flats)} объектов")
+
+            progress.progress(int(page / TOTAL_PAGES * 60))
 
         except Exception as e:
             st.warning(f"Ошибка страницы {page}: {e}")
 
-        progress.progress(int(page / TOTAL_PAGES * 70))
+        time.sleep(0.2)
 
-    status.info("Фильтрация данных")
+    status.info("Фильтрация (Москва / метро / цена / площадь)")
 
     df = pd.DataFrame(all_flats)
 
-    # Только Москва
+    # ---------------------------
+    # ЖЁСТКАЯ СТАБИЛИЗАЦИЯ (ВАЖНО)
+    # ---------------------------
+
+    # Москва
     if "location" in df.columns:
-        df = df[
-            df["location"]
-            .astype(str)
-            .str.contains("Москва", case=False, na=False)
-        ]
+        df = df[df["location"].astype(str).str.contains("Москва", na=False)]
 
-    # Белорусская
-    metro_cols = [
-        c for c in df.columns
-        if "metro" in c.lower()
-    ]
-
+    # метро Белорусская (если есть)
+    metro_cols = [c for c in df.columns if "metro" in c.lower()]
     if metro_cols:
+        df = df[df[metro_cols[0]].astype(str).str.contains("Белорус", na=False)]
 
-        metro_col = metro_cols[0]
-
-        df = df[
-            df[metro_col]
-            .astype(str)
-            .str.contains(
-                "Белорус",
-                case=False,
-                na=False
-            )
-        ]
-
-    # Цена
+    # цена
     if "price" in df.columns:
+        df = df[(df["price"] >= 30_000_000) & (df["price"] <= 40_000_000)]
 
-        df = df[
-            (df["price"] >= 30_000_000)
-            &
-            (df["price"] <= 40_000_000)
-        ]
-
-    # Площадь
-    area_col = None
-
-    for c in df.columns:
-        if "area" in c.lower():
-            area_col = c
-            break
-
+    # площадь
+    area_col = next((c for c in df.columns if "area" in c.lower()), None)
     if area_col:
+        df = df[df[area_col] >= 40]
 
-        df = df[
-            (df[area_col] >= 40)
-        ]
+    progress.progress(85)
 
-    progress.progress(90)
+    status.info("Финальная очистка")
 
-    status.info("Подготовка результата")
-
+    # этажность
     if "floor" in df.columns:
-
-        df = df[
-            (df["floor"] >= 2)
-            &
-            (df["floor"] <= 5)
-        ]
+        df = df[(df["floor"] >= 2) & (df["floor"] <= 5)]
 
     progress.progress(100)
 
-    status.success(
-        f"Готово. Найдено {len(df)} квартир"
-    )
+    status.success(f"Готово: {len(df)} объектов")
+
+    # СОХРАНЯЕМ РЕЗУЛЬТАТ (КЛЮЧЕВО)
+    st.session_state.last_df = df
 
     return df
+
+
+# ---------------------------
+# UI
+# ---------------------------
+st.title("GRADOV SEARCH — TEST MODE")
+
+tab1, tab2 = st.tabs(["🧪 ТЕСТ", "📊 РЕЗУЛЬТАТ"])
+
+with tab1:
+
+    st.subheader("Быстрый тест (стабильная версия)")
+
+    st.write("""
+    Запрос:
+    - 1-комнатные
+    - Москва
+    - метро Белорусская
+    - 30–40 млн ₽
+    - от 40 м²
+    - этаж 2–5
+    """)
+
+    if st.button("🚀 Запустить тест", use_container_width=True):
+        df = safe_parse()
+        st.success("Тест завершён")
+
+with tab2:
+
+    st.subheader("Последний результат")
+
+    if st.session_state.last_df is not None:
+        st.dataframe(st.session_state.last_df, use_container_width=True)
+    else:
+        st.info("Пока нет данных. Запусти тест.")
