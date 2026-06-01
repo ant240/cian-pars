@@ -1,113 +1,75 @@
-import pandas as pd
 import streamlit as st
-from cianparser import CianParser
-import requests
-from bs4 import BeautifulSoup
+import pandas as pd
 
+from data_loader import load_data
 
-@st.cache_data(ttl=3600)
-def load_data():
+st.set_page_config(
+    page_title="GRADOV DEBUG",
+    layout="wide"
+)
 
-    parser = CianParser(location="Москва")
+st.title("GRADOV DEBUG")
 
-    try:
+st.info("Диагностика структуры данных")
 
-        data = parser.get_flats(
-            deal_type="sale",
-            rooms=(1, 2, 3, 4, 5),
-            with_saving_csv=False,
-            additional_settings={
-                "start_page": 1,
-                "end_page": 10
-            }
-        )
+if st.button("Загрузить данные"):
 
-    except Exception:
-        return pd.DataFrame()
+    with st.spinner("Загрузка..."):
 
-    df = pd.DataFrame(data)
+        df = load_data()
 
-    if len(df) == 0:
-        return pd.DataFrame()
+    st.success(f"Загружено объектов: {len(df)}")
 
-    if "price" in df.columns:
-        df = df[df["price"] > 0]
+    st.subheader("Колонки DataFrame")
 
-    if "total_meters" in df.columns:
-        df = df[df["total_meters"] > 0]
+    st.write(df.columns.tolist())
 
-    df = df.reset_index(drop=True)
+    st.subheader("Типы колонок")
 
-    return df
+    st.write(df.dtypes)
 
+    st.subheader("Первые 20 строк")
 
-@st.cache_data(ttl=86400)
-def load_card_details(url):
+    st.dataframe(
+        df.head(20),
+        use_container_width=True
+    )
 
-    result = {
-        "Год постройки": "",
-        "Тип дома": "",
-        "Высота потолков": "",
-        "Отделка": "",
-        "Сдача": "",
-        "До метро": ""
-    }
+    st.subheader("Размер DataFrame")
 
-    try:
+    st.write(df.shape)
 
-        headers = {
-            "User-Agent": (
-                "Mozilla/5.0 "
-                "(Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 "
-                "(KHTML, like Gecko) "
-                "Chrome/125.0 Safari/537.36"
+    st.subheader("Количество заполненных значений")
+
+    st.write(df.count())
+
+    st.subheader("Уникальные значения по важным полям")
+
+    important_columns = [
+        "metro",
+        "district",
+        "street",
+        "residential_complex",
+        "location"
+    ]
+
+    for col in important_columns:
+
+        if col in df.columns:
+
+            st.markdown(f"### {col}")
+
+            values = (
+                df[col]
+                .dropna()
+                .astype(str)
+                .unique()
+                .tolist()
             )
-        }
 
-        response = requests.get(
-            url,
-            headers=headers,
-            timeout=15
-        )
+            st.write(values[:100])
 
-        if response.status_code != 200:
-            return result
+    st.subheader("Полный список колонок")
 
-        html = response.text
-
-        if len(html) < 1000:
-            return result
-
-        soup = BeautifulSoup(
-            html,
-            "html.parser"
-        )
-
-        text = soup.get_text(
-            " ",
-            strip=True
-        )
-
-        if "Год постройки" in text:
-            result["Год постройки"] = "Есть"
-
-        if "Тип дома" in text:
-            result["Тип дома"] = "Есть"
-
-        if "Высота потолков" in text:
-            result["Высота потолков"] = "Есть"
-
-        if "Отделка" in text:
-            result["Отделка"] = "Есть"
-
-        if "Сдача" in text:
-            result["Сдача"] = "Есть"
-
-        if "метро" in text.lower():
-            result["До метро"] = "Есть"
-
-        return result
-
-    except Exception:
-        return result
+    for col in df.columns:
+        st.write(col)
