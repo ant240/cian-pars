@@ -1,121 +1,116 @@
 import streamlit as st
-import cianparser
+from cianparser import CianParser
+import pandas as pd
+import json
 import inspect
 
-st.set_page_config(page_title="GRADOV SEARCH DEBUG", layout="wide")
-
-st.title("GRADOV SEARCH — Диагностика cianparser")
-
-st.subheader("Версия конструктора")
-
-st.code(
-    str(
-        inspect.signature(
-            cianparser.CianParser
-        )
-    )
+st.set_page_config(
+    page_title="GRADOV SEARCH",
+    layout="wide"
 )
 
-st.subheader("Сигнатура get_flats()")
+st.title("GRADOV SEARCH")
+st.subheader("Диагностика структуры данных CIAN")
 
-st.code(
-    str(
-        inspect.signature(
-            cianparser.CianParser.get_flats
-        )
-    )
-)
+# ==========================
+# ПРОКСИ
+# ==========================
+
+PROXIES = []
 
 try:
-    with open("proxies.txt", "r") as f:
-        proxies = [x.strip() for x in f if x.strip()]
+    with open("proxies.txt", "r", encoding="utf-8") as f:
+        PROXIES = [x.strip() for x in f.readlines() if x.strip()]
+except:
+    pass
 
-    st.success(f"Прокси загружено: {len(proxies)}")
+st.write("Прокси загружено:", len(PROXIES))
 
-except Exception as e:
-    proxies = None
-    st.error(f"Ошибка загрузки прокси: {e}")
+# ==========================
+# ИНФОРМАЦИЯ О БИБЛИОТЕКЕ
+# ==========================
 
-if st.button("Создать парсер"):
+st.markdown("### Конструктор")
+
+st.code(str(inspect.signature(CianParser)))
+
+parser = CianParser(
+    location="Аэропорт",
+    proxies=PROXIES
+)
+
+st.success("Парсер успешно создан")
+
+st.markdown("### Метод get_flats")
+
+st.code(str(inspect.signature(parser.get_flats)))
+
+# ==========================
+# ЗАГРУЗКА 1 СТРАНИЦЫ
+# ==========================
+
+if st.button("Получить тестовые данные"):
 
     try:
 
-        parser = cianparser.CianParser(
-            location="Москва",
-            proxies=proxies
-        )
+        with st.spinner("Загружаем только 1 страницу..."):
 
-        st.success("Парсер успешно создан")
-
-        st.write("Тип объекта:")
-        st.code(str(type(parser)))
-
-    except Exception as e:
-
-        st.error(f"Ошибка создания парсера:\n{e}")
-
-st.markdown("---")
-
-st.subheader("Тест загрузки данных")
-
-deal_type = st.selectbox(
-    "Тип сделки",
-    ["sale", "rent_long"]
-)
-
-rooms = st.multiselect(
-    "Комнаты",
-    [1, 2, 3, 4],
-    default=[1]
-)
-
-if st.button("Получить объявления"):
-
-    try:
-
-        parser = cianparser.CianParser(
-            location="Москва",
-            proxies=proxies
-        )
-
-        st.write("Запрашиваем данные...")
-
-        data = parser.get_flats(
-            deal_type=deal_type,
-            rooms=tuple(rooms)
-        )
+            data = parser.get_flats(
+                deal_type="sale",
+                rooms=(1,),
+                additional_settings={
+                    "start_page": 1,
+                    "end_page": 1
+                }
+            )
 
         st.success(f"Получено объектов: {len(data)}")
 
-        if len(data) > 0:
+        if not data:
+            st.error("Объекты не найдены")
+            st.stop()
 
-            st.markdown("---")
+        first = data[0]
 
-            st.subheader("Полный JSON первого объекта")
+        st.markdown("---")
+        st.subheader("Первый объект целиком")
 
-            st.json(data[0])
+        st.json(first)
 
-            st.markdown("---")
+        st.markdown("---")
+        st.subheader("Все доступные поля")
 
-            st.subheader("Все ключи первого объекта")
+        keys = sorted(list(first.keys()))
 
-            st.write(sorted(data[0].keys()))
+        st.write(keys)
 
-            st.markdown("---")
+        st.markdown("---")
+        st.subheader("Таблица полей")
 
-            st.subheader("Тип каждого поля")
+        fields_df = pd.DataFrame({
+            "Поле": keys,
+            "Значение": [str(first.get(k)) for k in keys]
+        })
 
-            field_types = {}
+        st.dataframe(
+            fields_df,
+            use_container_width=True
+        )
 
-            for k, v in data[0].items():
-                field_types[k] = str(type(v))
+        st.markdown("---")
+        st.subheader("Все объекты")
 
-            st.json(field_types)
+        df = pd.DataFrame(data)
 
-        else:
+        st.write("Колонки:")
 
-            st.warning("Объекты не получены")
+        st.write(df.columns.tolist())
+
+        st.dataframe(
+            df,
+            use_container_width=True
+        )
 
     except Exception as e:
 
-        st.error(f"Ошибка:\n{e}")
+        st.error(str(e))
