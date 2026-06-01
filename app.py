@@ -1,116 +1,272 @@
 import streamlit as st
-from cianparser import CianParser
 import pandas as pd
-import json
-import inspect
+from cianparser import CianParser
 
 st.set_page_config(
-    page_title="GRADOV SEARCH",
+    page_title="GRADOV SEARCH DATA TEST",
     layout="wide"
 )
 
 st.title("GRADOV SEARCH")
-st.subheader("Диагностика структуры данных CIAN")
+st.subheader("Проверка качества данных")
 
-# ==========================
-# ПРОКСИ
-# ==========================
+# -------------------------
+# ПАРСЕР
+# -------------------------
 
-PROXIES = []
+parser = CianParser(location="Москва")
+
+# -------------------------
+# ЗАГРУЗКА
+# -------------------------
+
+@st.cache_data(ttl=3600)
+def load_data():
+
+    data = parser.get_flats(
+        deal_type="sale",
+        rooms=(1,),
+        with_extra_data=True
+    )
+
+    return pd.DataFrame(data)
 
 try:
-    with open("proxies.txt", "r", encoding="utf-8") as f:
-        PROXIES = [x.strip() for x in f.readlines() if x.strip()]
-except:
-    pass
 
-st.write("Прокси загружено:", len(PROXIES))
+    with st.spinner("Загрузка данных..."):
 
-# ==========================
-# ИНФОРМАЦИЯ О БИБЛИОТЕКЕ
-# ==========================
+        df = load_data()
 
-st.markdown("### Конструктор")
+except Exception as e:
 
-st.code(str(inspect.signature(CianParser)))
+    st.error(str(e))
+    st.stop()
 
-parser = CianParser(
-    location="Аэропорт",
-    proxies=PROXIES
+# -------------------------
+# ОБЩАЯ ИНФОРМАЦИЯ
+# -------------------------
+
+st.success(f"Получено объектов: {len(df)}")
+
+st.write("Колонки:")
+
+st.write(list(df.columns))
+
+# -------------------------
+# ПЕРВЫЕ ОБЪЕКТЫ
+# -------------------------
+
+st.subheader("Первые объекты")
+
+st.dataframe(df.head(20), width="stretch")
+
+# -------------------------
+# ГОРОДА
+# -------------------------
+
+st.subheader("Уникальные location")
+
+locations = (
+    df["location"]
+    .fillna("")
+    .astype(str)
+    .str.strip()
+    .unique()
 )
 
-st.success("Парсер успешно создан")
+locations = sorted(locations)
 
-st.markdown("### Метод get_flats")
+st.write(locations)
 
-st.code(str(inspect.signature(parser.get_flats)))
+# -------------------------
+# РАЙОНЫ
+# -------------------------
 
-# ==========================
-# ЗАГРУЗКА 1 СТРАНИЦЫ
-# ==========================
+st.subheader("Уникальные районы")
 
-if st.button("Получить тестовые данные"):
+districts = (
+    df["district"]
+    .fillna("")
+    .astype(str)
+    .str.strip()
+    .unique()
+)
 
-    try:
+districts = sorted(districts)
 
-        with st.spinner("Загружаем только 1 страницу..."):
+st.write(districts)
 
-            data = parser.get_flats(
-                deal_type="sale",
-                rooms=(1,),
-                additional_settings={
-                    "start_page": 1,
-                    "end_page": 1
-                }
-            )
+# -------------------------
+# МЕТРО
+# -------------------------
 
-        st.success(f"Получено объектов: {len(data)}")
+st.subheader("Уникальные станции метро")
 
-        if not data:
-            st.error("Объекты не найдены")
-            st.stop()
+metro = (
+    df["underground"]
+    .fillna("")
+    .astype(str)
+    .str.strip()
+    .unique()
+)
 
-        first = data[0]
+metro = sorted(metro)
 
-        st.markdown("---")
-        st.subheader("Первый объект целиком")
+st.write(metro)
 
-        st.json(first)
+# -------------------------
+# ПРОВЕРКА МОСКВЫ
+# -------------------------
 
-        st.markdown("---")
-        st.subheader("Все доступные поля")
+st.subheader("Проверка Москвы")
 
-        keys = sorted(list(first.keys()))
+moscow_keywords = [
+    "Москва",
+    "Аэропорт",
+    "Хамовники",
+    "Арбат",
+    "Якиманка",
+    "Раменки",
+    "Тверской",
+    "Пресненский",
+    "Дорогомилово",
+    "Алексеевский",
+    "Савеловский"
+]
 
-        st.write(keys)
+def is_moscow(row):
 
-        st.markdown("---")
-        st.subheader("Таблица полей")
+    text = " ".join([
+        str(row.get("location", "")),
+        str(row.get("district", "")),
+        str(row.get("street", "")),
+        str(row.get("underground", "")),
+        str(row.get("residential_complex", ""))
+    ])
 
-        fields_df = pd.DataFrame({
-            "Поле": keys,
-            "Значение": [str(first.get(k)) for k in keys]
-        })
+    text = text.lower()
 
-        st.dataframe(
-            fields_df,
-            use_container_width=True
+    return any(
+        k.lower() in text
+        for k in moscow_keywords
+    )
+
+df["is_moscow"] = df.apply(is_moscow, axis=1)
+
+moscow_df = df[df["is_moscow"]]
+
+non_moscow_df = df[~df["is_moscow"]]
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.metric(
+        "Похоже на Москву",
+        len(moscow_df)
+    )
+
+with col2:
+    st.metric(
+        "Не похоже на Москву",
+        len(non_moscow_df)
+    )
+
+# -------------------------
+# ПРОБЛЕМНЫЕ ОБЪЕКТЫ
+# -------------------------
+
+st.subheader("Подозрительные объекты")
+
+if len(non_moscow_df):
+
+    st.dataframe(
+        non_moscow_df[
+            [
+                "location",
+                "district",
+                "street",
+                "house_number",
+                "underground",
+                "price",
+                "url"
+            ]
+        ],
+        width="stretch"
+    )
+
+else:
+
+    st.success("Посторонних регионов не найдено")
+
+# -------------------------
+# ПРОПУЩЕННЫЕ ПОЛЯ
+# -------------------------
+
+st.subheader("Заполненность данных")
+
+quality = []
+
+for col in df.columns:
+
+    filled = df[col].notna().sum()
+
+    quality.append({
+        "Поле": col,
+        "Заполнено": filled,
+        "Всего": len(df),
+        "%": round(
+            filled / len(df) * 100,
+            1
         )
+    })
 
-        st.markdown("---")
-        st.subheader("Все объекты")
+quality_df = pd.DataFrame(quality)
 
-        df = pd.DataFrame(data)
+st.dataframe(
+    quality_df.sort_values("%"),
+    width="stretch"
+)
 
-        st.write("Колонки:")
+# -------------------------
+# ЦЕНА ЗА М2
+# -------------------------
 
-        st.write(df.columns.tolist())
+if (
+    "price" in df.columns
+    and
+    "total_meters" in df.columns
+):
 
-        st.dataframe(
-            df,
-            use_container_width=True
-        )
+    df["price_per_m2"] = (
+        df["price"]
+        /
+        df["total_meters"]
+    )
 
-    except Exception as e:
+    st.subheader("Цена за м²")
 
-        st.error(str(e))
+    st.dataframe(
+        df[
+            [
+                "district",
+                "street",
+                "price",
+                "total_meters",
+                "price_per_m2"
+            ]
+        ],
+        width="stretch"
+    )
+
+# -------------------------
+# ЭКСПОРТ
+# -------------------------
+
+csv = df.to_csv(index=False)
+
+st.download_button(
+    "Скачать CSV",
+    csv,
+    "gradov_data_test.csv",
+    "text/csv"
+)
