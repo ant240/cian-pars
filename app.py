@@ -1,70 +1,120 @@
 import streamlit as st
 import pandas as pd
 import cianparser
-from time import sleep
+import time
 
-st.set_page_config(page_title="GRADOV SEARCH - Тест", layout="wide")
 
-st.title("GRADOV SEARCH — Тестовый режим")
+def run_demo_test():
 
-# --- Кнопка теста ---
-if st.button("🚀 Быстрый тест: однушки на Белорусской"):
+    progress = st.progress(0)
+    status = st.empty()
+    counter = st.empty()
 
-    # Индикатор загрузки
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-
-    # Инициализация парсера
     parser = cianparser.CianParser(location="Москва")
-    status_text.text("Создаём парсер...")
 
-    # Быстро ограничиваем выбор: 1-комнатные, 2–5 этажи, Белорусская
-    rooms = (1,)
-    min_floor, max_floor = 2, 5
-    min_price, max_price = 0, 40_000_000
-    min_area = 40
+    all_flats = []
 
-    status_text.text("Запрашиваем данные...")
-    # --- Ограничиваем парсер по страницам для ускорения ---
-    flats_raw = parser.get_flats(
-        deal_type="sale",
-        rooms=rooms,
-        additional_settings={
-            "start_page": 1,
-            "end_page": 2,  # только 2 страницы для быстрого теста
-        }
-    )
+    TOTAL_PAGES = 3
 
-    status_text.text(f"Найдено объявлений: {len(flats_raw)}")
-    progress_bar.progress(20)
+    for page in range(1, TOTAL_PAGES + 1):
 
-    # --- Преобразуем в DataFrame ---
-    df = pd.DataFrame(flats_raw)
+        status.info(
+            f"Получение объявлений. Страница {page}/{TOTAL_PAGES}"
+        )
 
-    # --- Фильтруем по улице, площади, цене, этажу ---
-    df_test = df[
-        df["street"].str.contains("Белорусская", na=False)
-        & (df["total_meters"] >= min_area)
-        & (df["price"] <= max_price)
-        & (df["floor"] >= min_floor)
-        & (df["floor"] <= max_floor)
+        try:
+
+            flats = parser.get_flats(
+                deal_type="sale",
+                rooms=(1,),
+                additional_settings={
+                    "start_page": page,
+                    "end_page": page
+                }
+            )
+
+            all_flats.extend(flats)
+
+            counter.success(
+                f"Найдено объявлений: {len(all_flats)}"
+            )
+
+        except Exception as e:
+            st.warning(f"Ошибка страницы {page}: {e}")
+
+        progress.progress(int(page / TOTAL_PAGES * 70))
+
+    status.info("Фильтрация данных")
+
+    df = pd.DataFrame(all_flats)
+
+    # Только Москва
+    if "location" in df.columns:
+        df = df[
+            df["location"]
+            .astype(str)
+            .str.contains("Москва", case=False, na=False)
+        ]
+
+    # Белорусская
+    metro_cols = [
+        c for c in df.columns
+        if "metro" in c.lower()
     ]
 
-    progress_bar.progress(50)
-    status_text.text(f"После фильтрации: {len(df_test)} объектов")
+    if metro_cols:
 
-    # Ограничим количество для теста
-    df_test = df_test.head(30)
-    progress_bar.progress(100)
+        metro_col = metro_cols[0]
 
-    st.success("✅ Тест выполнен!")
-    st.dataframe(df_test)
+        df = df[
+            df[metro_col]
+            .astype(str)
+            .str.contains(
+                "Белорус",
+                case=False,
+                na=False
+            )
+        ]
 
-    # --- Ссылки на объекты ---
-    st.markdown("### Ссылки на квартиры")
-    for i, row in df_test.iterrows():
-        st.markdown(f"- [{row['street']} {row.get('house_number','')}]( {row['url']} ) — {row['total_meters']} м², {row['price']:,} ₽, этаж {row['floor']}")
+    # Цена
+    if "price" in df.columns:
 
-# --- Кнопка очистки ---
-if st.button("🧹 Очистить тестовые поля"):
-    st.experimental_rerun()
+        df = df[
+            (df["price"] >= 30_000_000)
+            &
+            (df["price"] <= 40_000_000)
+        ]
+
+    # Площадь
+    area_col = None
+
+    for c in df.columns:
+        if "area" in c.lower():
+            area_col = c
+            break
+
+    if area_col:
+
+        df = df[
+            (df[area_col] >= 40)
+        ]
+
+    progress.progress(90)
+
+    status.info("Подготовка результата")
+
+    if "floor" in df.columns:
+
+        df = df[
+            (df["floor"] >= 2)
+            &
+            (df["floor"] <= 5)
+        ]
+
+    progress.progress(100)
+
+    status.success(
+        f"Готово. Найдено {len(df)} квартир"
+    )
+
+    return df
