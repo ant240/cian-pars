@@ -1,35 +1,32 @@
 import streamlit as st
-import cianparser
-import inspect
+from cianparser import CianParser  # твой рабочий форк
 
-st.title("Проверка cianparser")
+st.title("GRADOV SEARCH — Проверка ключей объектов")
 
-st.write("Версия конструктора:")
-
-st.code(str(inspect.signature(cianparser.CianParser)))
-
+# Загружаем прокси
 try:
+    with open("proxies.txt", "r") as f:
+        proxies = [line.strip() for line in f if line.strip()]
+except FileNotFoundError:
+    proxies = []
+    st.error("Файл proxies.txt не найден")
 
-    parser = cianparser.CianParser(
-        location="Москва"
-    )
-
+# Кнопка создания парсера
+if st.button("Создать парсер и загрузить данные"):
+    parser = CianParser(location="Москва", proxies=proxies)
     st.success("Парсер создан")
-
-    data = parser.get_flats(
-        deal_type="sale",
-        rooms=(1,),
-        additional_settings={
-            "start_page": 1,
-            "end_page": 1
-        }
-    )
-
-    st.write("Количество объектов:")
-    st.write(len(data))
-
-    if len(data) > 0:
-        st.write(data[0])
-
-except Exception as e:
-    st.error(str(e))
+    
+    # Получаем список объектов
+    data = parser.get_flats()  # вернёт список словарей
+    if not data:
+        st.warning("Нет данных. Попробуйте другой прокси или другой фильтр")
+    else:
+        st.info(f"Всего объектов получено: {len(data)}")
+        
+        # Показываем полный JSON первого объекта
+        st.subheader("Пример полного объекта (первый элемент)")
+        st.json(data[0])
+        
+        # Список всех ключей для удобства
+        st.subheader("Все ключи первого объекта")
+        st.write(list(data[0].keys()))
